@@ -1,0 +1,4 @@
+ls projects
+unknown-command
+exit now
+cd documents

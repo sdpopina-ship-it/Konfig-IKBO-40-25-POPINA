@@ -3,7 +3,14 @@
 import tkinter as tk
 from tkinter import scrolledtext
 
-from src.shell import execute_command
+from src.command_log import CommandLogger
+from src.config import (
+    AppConfig,
+    format_configuration,
+    parse_arguments,
+    read_startup_script,
+)
+from src.shell import CommandResult, execute_command
 
 VFS_NAME = "demo-vfs"
 BACKGROUND = "#1e1e1e"
@@ -16,8 +23,13 @@ PROMPT = "vfs:~$"
 class ShellWindow:
     """Окно с историей команд и полем ввода."""
 
-    def __init__(self, root: tk.Tk) -> None:
+    def __init__(
+        self,
+        root: tk.Tk,
+        logger: CommandLogger | None = None,
+    ) -> None:
         self.root = root
+        self.logger = logger
         self.root.title(f"Эмулятор оболочки - VFS: {VFS_NAME}")
         self.root.configure(background=BACKGROUND)
         self.root.minsize(640, 360)
@@ -57,9 +69,7 @@ class ShellWindow:
         """Показать введённую строку и результат её обработки."""
 
         line = self.command_text.get()
-        self.output_lines.append(self.active_prompt())
-        result = execute_command(line)
-        self.output_lines.append(result.message)
+        result = self.execute_line(line)
         self.command_text.set("")
         if result.should_exit:
             self.root.after(400, self.root.destroy)
@@ -69,6 +79,40 @@ class ShellWindow:
 
         command = self.command_text.get()
         return f"{PROMPT} {command}" if command else PROMPT
+
+    def execute_line(self, line: str) -> CommandResult:
+        """Выполнить строку и добавить её результат в историю."""
+
+        self.output_lines.append(f"{PROMPT} {line}" if line else PROMPT)
+        result = execute_command(line)
+        self.output_lines.append(result.message)
+        self.log_command(line, result)
+        self.refresh_history()
+        return result
+
+    def log_command(self, line: str, result: CommandResult) -> None:
+        """Записать вызов команды в журнал, если он настроен."""
+
+        if not self.logger:
+            return
+        error = self.logger.log(line, result)
+        if error:
+            self.output_lines.append(f"Ошибка записи лога: {error}")
+
+    def run_startup_script(self, lines: list[str]) -> None:
+        """Последовательно выполнить строки стартового скрипта."""
+
+        for line in lines:
+            result = self.execute_line(line)
+            if result.should_exit:
+                self.root.after(400, self.root.destroy)
+                return
+
+    def show_message(self, message: str) -> None:
+        """Добавить служебное сообщение в область вывода."""
+
+        self.output_lines.append(message)
+        self.refresh_history()
 
     def refresh_history(self, *_args: str) -> None:
         """Обновить историю, не разрешая пользователю редактировать её."""
@@ -81,12 +125,27 @@ class ShellWindow:
         self.history.configure(state=tk.DISABLED)
 
 
-def main() -> None:
+def main(arguments: list[str] | None = None) -> None:
     """Создать и запустить окно приложения."""
 
+    config = parse_arguments(arguments)
+    print(format_configuration(config))
     root = tk.Tk()
-    ShellWindow(root)
+    logger = CommandLogger(config.log_path) if config.log_path else None
+    shell = ShellWindow(root, logger)
+    run_startup_script(shell, config)
     root.mainloop()
+
+
+def run_startup_script(shell: ShellWindow, config: AppConfig) -> None:
+    """Загрузить скрипт и показать ошибку, если его нельзя прочитать."""
+
+    if not config.script_path:
+        return
+    try:
+        shell.run_startup_script(read_startup_script(config.script_path))
+    except OSError as error:
+        shell.show_message(f"Ошибка загрузки скрипта: {error}")
 
 
 if __name__ == "__main__":

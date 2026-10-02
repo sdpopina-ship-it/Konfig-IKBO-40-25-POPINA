@@ -24,7 +24,9 @@ class ExecuteCommandTests(unittest.TestCase):
         self.assertFalse(result.should_exit)
 
     def test_unknown_command_returns_error(self) -> None:
-        self.assertIn("неизвестная команда", execute_command("pwd").message)
+        result = execute_command("pwd")
+        self.assertIn("неизвестная команда", result.message)
+        self.assertTrue(result.is_error)
 
     def test_exit_without_arguments_closes_application(self) -> None:
         result = execute_command("exit")
@@ -33,8 +35,8 @@ class ExecuteCommandTests(unittest.TestCase):
     def test_exit_with_arguments_returns_error(self) -> None:
         result = execute_command("exit now")
         self.assertIn("не принимает аргументы", result.message)
+        self.assertTrue(result.is_error)
 
 
 if __name__ == "__main__":
     unittest.main()
-
