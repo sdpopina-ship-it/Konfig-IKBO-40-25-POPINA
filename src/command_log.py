@@ -12,6 +12,8 @@ class CommandLogger:
     """Сохраняет историю выполненных команд в JSON-массив."""
 
     def __init__(self, path: Path) -> None:
+        """Сохранить путь к JSON-файлу журнала."""
+
         self.path = path
 
     def log(self, line: str, result: CommandResult) -> str | None:

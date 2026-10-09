@@ -28,15 +28,32 @@ class ShellWindow:
         root: tk.Tk,
         logger: CommandLogger | None = None,
     ) -> None:
+        """Создать окно, историю команд и поле ввода."""
+
         self.root = root
         self.logger = logger
+        self.configure_window()
+        self.output_lines: list[str] = []
+        self.command_text = tk.StringVar()
+        self.history = self.create_history()
+        self.entry = self.create_entry()
+        self.entry.bind("<Return>", self.handle_input)
+        self.command_text.trace_add("write", self.refresh_history)
+        self.refresh_history()
+        self.entry.focus_set()
+
+    def configure_window(self) -> None:
+        """Настроить размеры, заголовок и фон окна."""
+
         self.root.title(f"Эмулятор оболочки - VFS: {VFS_NAME}")
         self.root.configure(background=BACKGROUND)
         self.root.minsize(640, 360)
-        self.output_lines: list[str] = []
-        self.command_text = tk.StringVar()
-        self.history = scrolledtext.ScrolledText(
-            root,
+
+    def create_history(self) -> scrolledtext.ScrolledText:
+        """Создать недоступную для ввода область истории."""
+
+        history = scrolledtext.ScrolledText(
+            self.root,
             background=BACKGROUND,
             borderwidth=0,
             font=FONT,
@@ -46,9 +63,14 @@ class ShellWindow:
             state=tk.DISABLED,
             wrap=tk.WORD,
         )
-        self.history.pack(padx=14, pady=(14, 0), fill=tk.BOTH, expand=True)
-        self.entry = tk.Entry(
-            root,
+        history.pack(padx=14, pady=(14, 0), fill=tk.BOTH, expand=True)
+        return history
+
+    def create_entry(self) -> tk.Entry:
+        """Создать отдельное поле ввода команды."""
+
+        entry = tk.Entry(
+            self.root,
             background="#292929",
             borderwidth=1,
             font=FONT,
@@ -59,11 +81,8 @@ class ShellWindow:
             insertbackground=FOREGROUND,
             textvariable=self.command_text,
         )
-        self.entry.pack(padx=14, pady=(8, 14), fill=tk.X)
-        self.entry.bind("<Return>", self.handle_input)
-        self.command_text.trace_add("write", self.refresh_history)
-        self.refresh_history()
-        self.entry.focus_set()
+        entry.pack(padx=14, pady=(8, 14), fill=tk.X)
+        return entry
 
     def handle_input(self, _event: tk.Event) -> None:
         """Показать введённую строку и результат её обработки."""

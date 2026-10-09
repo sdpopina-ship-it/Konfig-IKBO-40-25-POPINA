@@ -6,7 +6,11 @@ import unittest
 from pathlib import Path
 
 from src.command_log import CommandLogger
-from src.config import format_configuration, parse_arguments, read_startup_script
+from src.config import (
+    format_configuration,
+    parse_arguments,
+    read_startup_script,
+)
 from src.shell import execute_command
 
 
@@ -14,6 +18,8 @@ class ConfigurationTests(unittest.TestCase):
     """Проверки параметров командной строки."""
 
     def test_reads_all_supported_paths(self) -> None:
+        """Параметры преобразуются в ожидаемые пути."""
+
         config = parse_arguments(
             [
                 "--vfs-path",
@@ -29,6 +35,8 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(config.script_path, Path("scripts/startup.txt"))
 
     def test_formats_debug_information(self) -> None:
+        """Отладочный вывод содержит заданные и пустые параметры."""
+
         config = parse_arguments(["--vfs-path", "example-vfs"])
         self.assertIn("example-vfs", format_configuration(config))
         self.assertIn("не указан", format_configuration(config))
@@ -38,12 +46,16 @@ class ScriptAndLogTests(unittest.TestCase):
     """Проверки стартового скрипта и журнала команд."""
 
     def test_reads_nonempty_script_lines(self) -> None:
+        """Пустые строки не передаются на выполнение."""
+
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "startup.txt"
             path.write_text("ls\n\ncd documents\n", encoding="utf-8")
             self.assertEqual(read_startup_script(path), ["ls", "cd documents"])
 
     def test_writes_command_event_to_json(self) -> None:
+        """Событие команды содержит обязательные поля."""
+
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "commands.json"
             logger = CommandLogger(path)
