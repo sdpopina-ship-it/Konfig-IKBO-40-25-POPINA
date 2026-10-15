@@ -1,0 +1,4 @@
+ls level-one
+cd level-one/level-two
+vfs-save generated-vfs/deep
+unknown-command

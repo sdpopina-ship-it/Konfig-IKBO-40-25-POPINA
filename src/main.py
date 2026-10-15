@@ -11,8 +11,9 @@ from src.config import (
     read_startup_script,
 )
 from src.shell import CommandResult, execute_command
+from src.vfs import VfsError, VirtualFileSystem
 
-VFS_NAME = "demo-vfs"
+DEFAULT_VFS_NAME = "demo-vfs"
 BACKGROUND = "#1e1e1e"
 FOREGROUND = "#d7d7d7"
 PROMPT_COLOR = "#78dce8"
@@ -27,11 +28,13 @@ class ShellWindow:
         self,
         root: tk.Tk,
         logger: CommandLogger | None = None,
+        vfs: VirtualFileSystem | None = None,
     ) -> None:
         """Создать окно, историю команд и поле ввода."""
 
         self.root = root
         self.logger = logger
+        self.vfs = vfs
         self.configure_window()
         self.output_lines: list[str] = []
         self.command_text = tk.StringVar()
@@ -45,7 +48,8 @@ class ShellWindow:
     def configure_window(self) -> None:
         """Настроить размеры, заголовок и фон окна."""
 
-        self.root.title(f"Эмулятор оболочки - VFS: {VFS_NAME}")
+        vfs_name = self.vfs.name if self.vfs else DEFAULT_VFS_NAME
+        self.root.title(f"Эмулятор оболочки - VFS: {vfs_name}")
         self.root.configure(background=BACKGROUND)
         self.root.minsize(640, 360)
 
@@ -103,7 +107,7 @@ class ShellWindow:
         """Выполнить строку и добавить её результат в историю."""
 
         self.output_lines.append(f"{PROMPT} {line}" if line else PROMPT)
-        result = execute_command(line)
+        result = execute_command(line, self.vfs)
         self.output_lines.append(result.message)
         self.log_command(line, result)
         self.refresh_history()
@@ -151,7 +155,10 @@ def main(arguments: list[str] | None = None) -> None:
     print(format_configuration(config))
     root = tk.Tk()
     logger = CommandLogger(config.log_path) if config.log_path else None
-    shell = ShellWindow(root, logger)
+    vfs, message = load_virtual_file_system(config)
+    shell = ShellWindow(root, logger, vfs)
+    if message:
+        shell.show_message(message)
     run_startup_script(shell, config)
     root.mainloop()
 
@@ -165,6 +172,20 @@ def run_startup_script(shell: ShellWindow, config: AppConfig) -> None:
         shell.run_startup_script(read_startup_script(config.script_path))
     except OSError as error:
         shell.show_message(f"Ошибка загрузки скрипта: {error}")
+
+
+def load_virtual_file_system(
+    config: AppConfig,
+) -> tuple[VirtualFileSystem | None, str | None]:
+    """Создать снимок VFS или подготовить понятное сообщение об ошибке."""
+
+    if not config.vfs_path:
+        return None, None
+    try:
+        vfs = VirtualFileSystem.from_directory(config.vfs_path)
+    except (OSError, VfsError) as error:
+        return None, f"Ошибка загрузки VFS: {error}"
+    return vfs, f"VFS загружена в память из: {config.vfs_path}"
 
 
 if __name__ == "__main__":

@@ -1,0 +1,4 @@
+ls
+vfs-save generated-vfs/minimal
+cd documents
+unknown-command

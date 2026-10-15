@@ -1,0 +1,7 @@
+ls
+cd documents
+vfs-save generated-vfs/all-commands
+vfs-save
+unknown-command
+exit now
+exit

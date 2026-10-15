@@ -1,0 +1,5 @@
+ls docs
+vfs-save generated-vfs/files
+vfs-save
+cd data
+unknown-command
