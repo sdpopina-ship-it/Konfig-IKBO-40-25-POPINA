@@ -18,7 +18,7 @@ BACKGROUND = "#1e1e1e"
 FOREGROUND = "#d7d7d7"
 PROMPT_COLOR = "#78dce8"
 FONT = ("Menlo", 14)
-PROMPT = "vfs:~$"
+PROMPT_PREFIX = "vfs:"
 
 
 class ShellWindow:
@@ -35,6 +35,7 @@ class ShellWindow:
         self.root = root
         self.logger = logger
         self.vfs = vfs
+        self.current_path: tuple[str, ...] = ()
         self.configure_window()
         self.output_lines: list[str] = []
         self.command_text = tk.StringVar()
@@ -100,14 +101,18 @@ class ShellWindow:
     def active_prompt(self) -> str:
         """Вернуть текущую строку приглашения вместе с набираемой командой."""
 
+        prompt = f"{PROMPT_PREFIX}{format_prompt_path(self.current_path)}$"
         command = self.command_text.get()
-        return f"{PROMPT} {command}" if command else PROMPT
+        return f"{prompt} {command}" if command else prompt
 
     def execute_line(self, line: str) -> CommandResult:
         """Выполнить строку и добавить её результат в историю."""
 
-        self.output_lines.append(f"{PROMPT} {line}" if line else PROMPT)
-        result = execute_command(line, self.vfs)
+        prompt = f"{PROMPT_PREFIX}{format_prompt_path(self.current_path)}$"
+        self.output_lines.append(f"{prompt} {line}" if line else prompt)
+        result = execute_command(line, self.vfs, self.current_path)
+        if result.working_path is not None:
+            self.current_path = result.working_path
         self.output_lines.append(result.message)
         self.log_command(line, result)
         self.refresh_history()
@@ -186,6 +191,12 @@ def load_virtual_file_system(
     except (OSError, VfsError) as error:
         return None, f"Ошибка загрузки VFS: {error}"
     return vfs, f"VFS загружена в память из: {config.vfs_path}"
+
+
+def format_prompt_path(path: tuple[str, ...]) -> str:
+    """Оформить текущий путь VFS в виде части приглашения оболочки."""
+
+    return "~" if not path else f"~/{'/'.join(path)}"
 
 
 if __name__ == "__main__":

@@ -1,0 +1,21 @@
+ls
+ls -a
+ls -l
+ls -h
+ls -lah
+ls -ahl
+cd docs
+ls -l
+cd ..
+cd /data
+tail items.txt
+tail -n 2 items.txt
+cd /
+rev docs/guide.txt
+tail -n wrong data/items.txt
+ls -z
+cd notes.txt
+vfs-save generated-vfs/stage4
+unknown-command
+exit now
+exit

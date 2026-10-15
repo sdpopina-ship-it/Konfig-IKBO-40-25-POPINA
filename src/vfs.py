@@ -16,6 +16,7 @@ class VfsFile:
     """Файл, данные которого уже находятся в памяти."""
 
     content: bytes
+    mode: int = 0o644
 
 
 @dataclass
@@ -23,6 +24,7 @@ class VfsDirectory:
     """Каталог с дочерними объектами виртуальной файловой системы."""
 
     children: dict[str, VfsNode] = field(default_factory=dict)
+    mode: int = 0o755
 
 
 VfsNode: TypeAlias = VfsFile | VfsDirectory
@@ -47,8 +49,42 @@ class VirtualFileSystem:
 
         if target_path.exists() or target_path.is_symlink():
             raise VfsError(f"Путь сохранения уже существует: {target_path}")
-        target_path.mkdir(parents=True)
+        target_path.mkdir(parents=True, mode=self.root.mode)
+        target_path.chmod(self.root.mode)
         write_directory(self.root, target_path)
+
+    def resolve(
+        self,
+        path: str,
+        current_path: tuple[str, ...] = (),
+    ) -> tuple[VfsNode, tuple[str, ...]]:
+        """Найти объект VFS по абсолютному или относительному пути."""
+
+        parts = normalize_virtual_path(path, current_path)
+        node: VfsNode = self.root
+        for part in parts:
+            if not isinstance(node, VfsDirectory):
+                raise VfsError(f"Это не каталог: {part}")
+            try:
+                node = node.children[part]
+            except KeyError as error:
+                raise VfsError(f"Путь не найден: {path}") from error
+        return node, parts
+
+    def read_text(
+        self,
+        path: str,
+        current_path: tuple[str, ...] = (),
+    ) -> str:
+        """Прочитать UTF-8 текстовый файл из снимка VFS."""
+
+        node, _ = self.resolve(path, current_path)
+        if isinstance(node, VfsDirectory):
+            raise VfsError(f"Это каталог: {path}")
+        try:
+            return node.content.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise VfsError(f"Файл не является UTF-8 текстом: {path}") from error
 
 
 def validate_source_directory(source_path: Path) -> None:
@@ -86,7 +122,39 @@ def write_directory(directory: VfsDirectory, path: Path) -> None:
     for name, node in directory.children.items():
         destination = path / name
         if isinstance(node, VfsDirectory):
-            destination.mkdir()
+            destination.mkdir(mode=node.mode)
+            destination.chmod(node.mode)
             write_directory(node, destination)
         else:
             destination.write_bytes(node.content)
+            destination.chmod(node.mode)
+
+
+def normalize_virtual_path(
+    path: str,
+    current_path: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Нормализовать путь, не позволяя подняться выше корня VFS."""
+
+    is_rooted = path.startswith("/") or path == "~" or path.startswith("~/")
+    parts = [] if is_rooted else list(current_path)
+    tail = trim_virtual_path_prefix(path)
+    for part in tail.split("/"):
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if parts:
+                parts.pop()
+            continue
+        parts.append(part)
+    return tuple(parts)
+
+
+def trim_virtual_path_prefix(path: str) -> str:
+    """Убрать только допустимый признак корня из пути VFS."""
+
+    if path.startswith("/"):
+        return path[1:]
+    if path == "~":
+        return ""
+    return path[2:] if path.startswith("~/") else path
