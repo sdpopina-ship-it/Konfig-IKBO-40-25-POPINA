@@ -5,6 +5,9 @@ from pathlib import Path
 
 from src.vfs import VfsDirectory, VfsError, VfsFile, VfsNode, VirtualFileSystem
 
+BYTES_PER_KILOBYTE = 1024
+TAIL_SHORT_OPTION_PREFIX_LENGTH = len("-n")
+
 
 @dataclass(frozen=True)
 class CommandResult:
@@ -233,9 +236,9 @@ def format_size(size: int, human_readable: bool) -> str:
     units = ("B", "K", "M", "G")
     value = float(size)
     for unit in units:
-        if value < 1024 or unit == units[-1]:
+        if value < BYTES_PER_KILOBYTE or unit == units[-1]:
             return f"{value:g}{unit}"
-        value /= 1024
+        value /= BYTES_PER_KILOBYTE
     return f"{size}B"
 
 
@@ -271,8 +274,10 @@ def parse_tail_arguments(arguments: list[str]) -> tuple[int, str]:
             if index >= len(arguments):
                 raise VfsError("после -n нужно указать число")
             count = parse_tail_count(arguments[index])
-        elif argument.startswith("-n") and len(argument) > 2:
-            count = parse_tail_count(argument[2:])
+        elif argument.startswith("-n") and (
+            len(argument) > TAIL_SHORT_OPTION_PREFIX_LENGTH
+        ):
+            count = parse_tail_count(argument[TAIL_SHORT_OPTION_PREFIX_LENGTH:])
         else:
             paths.append(argument)
         index += 1
