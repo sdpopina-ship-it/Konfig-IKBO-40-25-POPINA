@@ -59,6 +59,32 @@ class VirtualFileSystemTests(unittest.TestCase):
         self.assertTrue(result.is_error)
         self.assertIn("VFS не загружена", result.message)
 
+    def test_rmdir_changes_snapshot_without_changing_source(self) -> None:
+        """Удаление пустого каталога не затрагивает исходную папку на диске."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = create_source_tree(Path(directory))
+            empty_directory = source / "empty"
+            empty_directory.mkdir()
+            vfs = VirtualFileSystem.from_directory(source)
+            vfs.remove_empty_directory("empty")
+            self.assertTrue(empty_directory.is_dir())
+            with self.assertRaises(VfsError):
+                vfs.resolve("empty")
+
+    def test_chmod_changes_snapshot_without_changing_source(self) -> None:
+        """Изменение прав VFS не меняет права исходного файла на диске."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            source = create_source_tree(Path(directory))
+            source_file = source / "level-one" / "original.txt"
+            source_file.chmod(0o644)
+            vfs = VirtualFileSystem.from_directory(source)
+            vfs.change_mode("level-one/original.txt", 0o600)
+            node, _ = vfs.resolve("level-one/original.txt")
+            self.assertEqual(node.mode, 0o600)
+            self.assertEqual(source_file.stat().st_mode & 0o777, 0o644)
+
 
 def create_source_tree(base_path: Path) -> Path:
     """Подготовить исходное дерево с текстовым и бинарным файлами."""

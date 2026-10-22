@@ -36,6 +36,7 @@ class ShellCommandTests(unittest.TestCase):
                     "docs": VfsDirectory(
                         {"guide.txt": VfsFile(b"alpha\nbeta\ngamma\n")}
                     ),
+                    "empty": VfsDirectory(),
                     "records.txt": VfsFile(records.encode("utf-8")),
                 }
             ),
@@ -45,7 +46,7 @@ class ShellCommandTests(unittest.TestCase):
         """Обычный ls не показывает скрытые файлы."""
 
         result = execute_command("ls", self.vfs)
-        self.assertEqual(result.message, "docs\nrecords.txt")
+        self.assertEqual(result.message, "docs\nempty\nrecords.txt")
 
     def test_ls_supports_combined_flags_in_any_order(self) -> None:
         """Каждая перестановка -l, -a и -h даёт расширенный вывод."""
@@ -100,6 +101,36 @@ class ShellCommandTests(unittest.TestCase):
         self.assertEqual(two_lines.message, "line-11\nline-12")
         compact = execute_command("tail -n1 records.txt", self.vfs)
         self.assertEqual(compact.message, "line-12")
+
+    def test_chmod_changes_mode_only_in_virtual_file_system(self) -> None:
+        """chmod меняет права объекта VFS и результат виден через ls -l."""
+
+        result = execute_command("chmod 700 docs", self.vfs)
+        self.assertFalse(result.is_error)
+        listing = execute_command("ls -l", self.vfs)
+        self.assertIn("drwx------", listing.message)
+        prefixed = execute_command("chmod 0o644 records.txt", self.vfs)
+        self.assertFalse(prefixed.is_error)
+
+    def test_chmod_rejects_invalid_mode_and_path(self) -> None:
+        """chmod сообщает об ошибке для неверных прав и отсутствующего пути."""
+
+        invalid_mode = execute_command("chmod 999 docs", self.vfs)
+        missing_path = execute_command("chmod 755 missing", self.vfs)
+        self.assertTrue(invalid_mode.is_error)
+        self.assertTrue(missing_path.is_error)
+
+    def test_rmdir_removes_only_empty_directory(self) -> None:
+        """rmdir удаляет пустой каталог, но отказывается удалять непустой."""
+
+        removed = execute_command("rmdir empty", self.vfs)
+        self.assertFalse(removed.is_error)
+        listing = execute_command("ls", self.vfs)
+        self.assertNotIn("empty", listing.message)
+        nonempty = execute_command("rmdir docs", self.vfs)
+        root = execute_command("rmdir /", self.vfs)
+        self.assertTrue(nonempty.is_error)
+        self.assertTrue(root.is_error)
 
     def test_vfs_command_requires_loaded_file_system(self) -> None:
         """Команды VFS объясняют, почему они недоступны без снимка."""

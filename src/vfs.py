@@ -86,6 +86,38 @@ class VirtualFileSystem:
         except UnicodeDecodeError as error:
             raise VfsError(f"Файл не является UTF-8 текстом: {path}") from error
 
+    def change_mode(
+        self,
+        path: str,
+        mode: int,
+        current_path: tuple[str, ...] = (),
+    ) -> None:
+        """Изменить права объекта только в оперативной памяти VFS."""
+
+        node, _ = self.resolve(path, current_path)
+        node.mode = mode
+
+    def remove_empty_directory(
+        self,
+        path: str,
+        current_path: tuple[str, ...] = (),
+    ) -> None:
+        """Удалить пустой каталог из снимка VFS без изменения источника."""
+
+        parts = normalize_virtual_path(path, current_path)
+        if not parts:
+            raise VfsError("нельзя удалить корневой каталог VFS")
+        parent = self.root
+        for part in parts[:-1]:
+            parent = get_child_directory(parent, part, path)
+        name = parts[-1]
+        node = get_child_node(parent, name, path)
+        if not isinstance(node, VfsDirectory):
+            raise VfsError(f"Это не каталог: {path}")
+        if node.children:
+            raise VfsError(f"Каталог не пуст: {path}")
+        del parent.children[name]
+
 
 def validate_source_directory(source_path: Path) -> None:
     """Проверить, что исходный путь — доступный обычный каталог."""
@@ -128,6 +160,32 @@ def write_directory(directory: VfsDirectory, path: Path) -> None:
         else:
             destination.write_bytes(node.content)
             destination.chmod(node.mode)
+
+
+def get_child_directory(
+    parent: VfsDirectory,
+    name: str,
+    original_path: str,
+) -> VfsDirectory:
+    """Вернуть дочерний каталог либо сообщить об ошибке пути VFS."""
+
+    node = get_child_node(parent, name, original_path)
+    if not isinstance(node, VfsDirectory):
+        raise VfsError(f"Это не каталог: {name}")
+    return node
+
+
+def get_child_node(
+    parent: VfsDirectory,
+    name: str,
+    original_path: str,
+) -> VfsNode:
+    """Вернуть объект из каталога либо сообщить, что путь не найден."""
+
+    try:
+        return parent.children[name]
+    except KeyError as error:
+        raise VfsError(f"Путь не найден: {original_path}") from error
 
 
 def normalize_virtual_path(

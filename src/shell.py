@@ -7,6 +7,11 @@ from src.vfs import VfsDirectory, VfsError, VfsFile, VfsNode, VirtualFileSystem
 
 BYTES_PER_KILOBYTE = 1024
 TAIL_SHORT_OPTION_PREFIX_LENGTH = len("-n")
+CHMOD_ARGUMENT_COUNT = len(("permissions", "path"))
+OCTAL_BASE = 8
+OCTAL_DIGITS = "01234567"
+OCTAL_PREFIX = "0o"
+PERMISSION_DIGIT_COUNT = len("755")
 
 
 @dataclass(frozen=True)
@@ -50,6 +55,10 @@ def execute_command(
         return execute_rev(arguments, vfs, current_path)
     if command == "tail":
         return execute_tail(arguments, vfs, current_path)
+    if command == "chmod":
+        return execute_chmod(arguments, vfs, current_path)
+    if command == "rmdir":
+        return execute_rmdir(arguments, vfs, current_path)
     return CommandResult(
         f"Ошибка: неизвестная команда: {command}",
         is_error=True,
@@ -156,6 +165,46 @@ def execute_tail(
         return text
     lines = text.splitlines()
     return CommandResult("\n".join(lines[-count:] if count else []))
+
+
+def execute_chmod(
+    arguments: list[str],
+    vfs: VirtualFileSystem | None,
+    current_path: tuple[str, ...],
+) -> CommandResult:
+    """Изменить права файла или каталога в памяти VFS."""
+
+    if not vfs:
+        return vfs_not_loaded_error()
+    if len(arguments) != CHMOD_ARGUMENT_COUNT:
+        return CommandResult(
+            "Ошибка: используйте chmod <права> <путь>.",
+            is_error=True,
+        )
+    try:
+        mode = parse_permission_mode(arguments[0])
+        vfs.change_mode(arguments[1], mode, current_path)
+    except VfsError as error:
+        return CommandResult(f"Ошибка chmod: {error}", is_error=True)
+    return CommandResult(f"Права изменены: {arguments[1]} -> {mode:03o}")
+
+
+def execute_rmdir(
+    arguments: list[str],
+    vfs: VirtualFileSystem | None,
+    current_path: tuple[str, ...],
+) -> CommandResult:
+    """Удалить пустой каталог только из снимка VFS в памяти."""
+
+    if not vfs:
+        return vfs_not_loaded_error()
+    if len(arguments) != 1:
+        return CommandResult("Ошибка: используйте rmdir <путь>.", is_error=True)
+    try:
+        vfs.remove_empty_directory(arguments[0], current_path)
+    except VfsError as error:
+        return CommandResult(f"Ошибка rmdir: {error}", is_error=True)
+    return CommandResult(f"Каталог удалён из VFS: {arguments[0]}")
 
 
 def parse_ls_arguments(arguments: list[str]) -> tuple[set[str], str]:
@@ -284,6 +333,19 @@ def parse_tail_arguments(arguments: list[str]) -> tuple[int, str]:
     if len(paths) != 1:
         raise VfsError("используйте tail [-n число] <файл>")
     return count, paths[0]
+
+
+def parse_permission_mode(value: str) -> int:
+    """Прочитать три восьмеричные цифры прав доступа команды chmod."""
+
+    mode_text = value.lower().removeprefix(OCTAL_PREFIX)
+    if mode_text.startswith("0") and len(mode_text) > PERMISSION_DIGIT_COUNT:
+        mode_text = mode_text[1:]
+    if len(mode_text) != PERMISSION_DIGIT_COUNT:
+        raise VfsError("права должны состоять из трёх восьмеричных цифр")
+    if any(digit not in OCTAL_DIGITS for digit in mode_text):
+        raise VfsError("права должны состоять из цифр от 0 до 7")
+    return int(mode_text, OCTAL_BASE)
 
 
 def parse_tail_count(value: str) -> int:

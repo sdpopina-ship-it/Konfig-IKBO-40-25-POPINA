@@ -1,0 +1,13 @@
+ls -l
+chmod 700 docs
+ls -l
+chmod 0644 docs/guide.txt
+ls -l docs/guide.txt
+chmod invalid docs
+chmod 755 missing
+rmdir docs
+rmdir /
+rmdir missing
+vfs-save generated-vfs/stage5
+exit now
+exit
